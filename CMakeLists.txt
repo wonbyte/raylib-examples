@@ -9,15 +9,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_COLOR_MAKEFILE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Optional: Fix for SDK path if using command-line tools only
-if(APPLE AND NOT DEFINED CMAKE_OSX_SYSROOT)
-  execute_process(
-    COMMAND xcrun --show-sdk-path
-    OUTPUT_VARIABLE _sdk
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-  set(CMAKE_OSX_SYSROOT "${_sdk}" CACHE PATH "MacOSX SDK root")
-endif()
+# Tell raylib's config script to look for shared libraries
+set(raylib_USE_STATIC_LIBS OFF CACHE BOOL "Use static raylib libraries")
 
 # Find raylib (assumes it's installed via Homebrew or system package)
 find_package(raylib REQUIRED)

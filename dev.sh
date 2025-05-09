@@ -5,12 +5,11 @@ DEFAULT_SOURCE="main"
 DEFAULT_CONFIG="Debug"
 
 function usage() {
-  echo "Usage: ./dev.sh [build|run|rebuild|clean|format|tidy|leaks|list] " \
+  echo "Usage: ./dev.sh [build|run|rebuild|clean|format|tidy|list] " \
        "[file (with or without .c/.cpp)] [--config Debug|Release]"
   echo "Examples:"
   echo "  ./dev.sh run"
   echo "  ./dev.sh run shapes --config Release"
-  echo "  ./dev.sh leaks main"
   exit 1
 }
 
@@ -53,8 +52,8 @@ function build() {
     echo "==> Using Ninja generator"
   fi
 
-  export CC="/opt/homebrew/opt/llvm/bin/clang"
-  export CXX="/opt/homebrew/opt/llvm/bin/clang++"
+  #export CC="/opt/homebrew/opt/llvm/bin/clang"
+  #export CXX="/opt/homebrew/opt/llvm/bin/clang++"
 
   cmake -S . -B "$BUILD_DIR" $GENERATOR \
         -DEXEC_SOURCE="$FILE_PATH" \
@@ -75,20 +74,6 @@ function run() {
 
   echo "==> Running $EXEC"
   "$EXEC"
-}
-
-function run_with_leaks() {
-  parse_args "$@"
-  BUILD_DIR="build-$CONFIG"
-  EXEC="./$BUILD_DIR/$FILE"
-
-  if [ ! -f "$EXEC" ]; then
-    echo "Executable not found. Building first..."
-    build "$FILE" --config "$CONFIG"
-  fi
-
-  echo "==> Running: leaks --atExit -- $EXEC"
-  leaks --atExit -- "$EXEC"
 }
 
 function clean() {
@@ -124,19 +109,19 @@ function tidy() {
 
   echo "==> Running clang-tidy on all examples/*.c and *.cpp files..."
 
-  RAYLIB_INCLUDE_DIR=$(brew --prefix raylib)/include
   BUILD_DIR="build-$CONFIG"
   COMPILE_COMMANDS="$BUILD_DIR/compile_commands.json"
 
   if [ ! -f "$COMPILE_COMMANDS" ]; then
     echo "Compile commands not found. Configuring first..."
-    cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$CONFIG"
+    cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$CONFIG" -DCMAKE_PREFIX_PATH=/usr/local
   fi
 
   # Run clang-tidy on all .c/.cpp files in examples/
-  find examples -type f \( -name '*.c' -o -name '*.cpp' \) | while read -r FILE; do
-    echo "==> Linting $FILE"
-    clang-tidy "$FILE" -p "$BUILD_DIR" -- -I"$RAYLIB_INCLUDE_DIR"
+  # Rely on compile_commands.json (-p "$BUILD_DIR") to provide include paths for raylib.h
+  find examples -type f \( -name '*.c' -o -name '*.cpp' \) | while read -r FILE_TO_TIDY; do
+    echo "==> Linting $FILE_TO_TIDY"
+    clang-tidy "$FILE_TO_TIDY" -p "$BUILD_DIR"
   done
 }
 
@@ -152,7 +137,6 @@ case "$1" in
   rebuild) shift; rebuild "$@" ;;
   format) format ;;
   tidy) shift; tidy "$@" ;;
-  leaks) shift; run_with_leaks "$@" ;;
   list) list ;;
   *) usage ;;
 esac
