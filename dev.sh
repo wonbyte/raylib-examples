@@ -5,8 +5,8 @@ DEFAULT_SOURCE="main"
 DEFAULT_CONFIG="Debug"
 
 function usage() {
-  echo "Usage: ./dev.sh [build|run|rebuild|clean|format|tidy|leaks] " \
-       "[file (with or without .c)] [--config Debug|Release]"
+  echo "Usage: ./dev.sh [build|run|rebuild|clean|format|tidy|leaks|list] " \
+       "[file (with or without .c/.cpp)] [--config Debug|Release]"
   echo "Examples:"
   echo "  ./dev.sh run"
   echo "  ./dev.sh run shapes --config Release"
@@ -16,7 +16,8 @@ function usage() {
 
 function parse_args() {
   FILE="${1:-$DEFAULT_SOURCE}"
-  FILE="${FILE%.c}"  # strip trailing .c if present
+  FILE="${FILE%.c}"
+  FILE="${FILE%.cpp}"
   CONFIG="$DEFAULT_CONFIG"
   shift || true
   while [[ $# -gt 0 ]]; do
@@ -30,21 +31,35 @@ function parse_args() {
         ;;
     esac
   done
-  FILE_PATH="examples/$FILE.c"
+
+  # Check whether .cpp or .c exists (prefer .cpp)
+  if [[ -f "examples/$FILE.cpp" ]]; then
+    EXT="cpp"
+  else
+    EXT="c"
+  fi
+
+  FILE_PATH="examples/$FILE.$EXT"
 }
 
 function build() {
   parse_args "$@"
   BUILD_DIR="build-$CONFIG"
   echo "==> Building $FILE_PATH with config=$CONFIG..."
+
   GENERATOR=""
   if command -v ninja &> /dev/null; then
     GENERATOR="-G Ninja"
     echo "==> Using Ninja generator"
   fi
+
+  export CC="/opt/homebrew/opt/llvm/bin/clang"
+  export CXX="/opt/homebrew/opt/llvm/bin/clang++"
+
   cmake -S . -B "$BUILD_DIR" $GENERATOR \
         -DEXEC_SOURCE="$FILE_PATH" \
         -DCMAKE_BUILD_TYPE="$CONFIG"
+
   cmake --build "$BUILD_DIR" --target "$FILE"
 }
 
@@ -88,12 +103,26 @@ function rebuild() {
 
 function format() {
   echo "==> Formatting source files..."
-  find examples -name '*.c' -o -name '*.h' -print0 | xargs -0 clang-format -i
+  find examples -type f \( -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.hpp' \) -print0 | xargs -0 clang-format -i
 }
 
 function tidy() {
-  parse_args "$@"
-  echo "==> Running clang-tidy on $FILE_PATH..."
+  CONFIG="$DEFAULT_CONFIG"
+
+  # Check for config flag
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --config)
+        CONFIG="$2"
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
+
+  echo "==> Running clang-tidy on all examples/*.c and *.cpp files..."
 
   RAYLIB_INCLUDE_DIR=$(brew --prefix raylib)/include
   BUILD_DIR="build-$CONFIG"
@@ -101,15 +130,19 @@ function tidy() {
 
   if [ ! -f "$COMPILE_COMMANDS" ]; then
     echo "Compile commands not found. Configuring first..."
-    cmake -S . -B "$BUILD_DIR" -DEXEC_SOURCE="$FILE_PATH" -DCMAKE_BUILD_TYPE="$CONFIG"
+    cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$CONFIG"
   fi
 
-  clang-tidy "$FILE_PATH" -p "$BUILD_DIR" -- -I"$RAYLIB_INCLUDE_DIR"
+  # Run clang-tidy on all .c/.cpp files in examples/
+  find examples -type f \( -name '*.c' -o -name '*.cpp' \) | while read -r FILE; do
+    echo "==> Linting $FILE"
+    clang-tidy "$FILE" -p "$BUILD_DIR" -- -I"$RAYLIB_INCLUDE_DIR"
+  done
 }
 
 function list() {
   echo "==> Available examples:"
-  find examples -type f -name '*.c' | sed 's|examples/||; s|\.c$||' | sort
+  find examples -type f \( -name '*.c' -o -name '*.cpp' \) | sed 's|examples/||; s|\.[^.]*$||' | sort
 }
 
 case "$1" in
