@@ -18,7 +18,8 @@ int main(void) {
 
     ClearBackground(RAYWHITE);
 
-    DrawText("Congrates! You cretaed your first window!", 190, 200, 20, LIGHTGRAY);
+    DrawText("Congrates! You cretaed your first window!", 190, 200, 20,
+             LIGHTGRAY);
 
     EndDrawing();
   }
